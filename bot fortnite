@@ -1,0 +1,108 @@
+import os
+import sqlite3
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, CallbackQueryHandler, filters
+import datetime
+
+DB_PATH = os.getenv('DB_PATH', 'bot_data.db')
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY,
+        username TEXT,
+        first_name TEXT
+    )""")
+    conn.commit()
+    conn.close()
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute('REPLACE INTO users (id, username, first_name) VALUES (?, ?, ?)',
+                (user.id, user.username or '', user.first_name or ''))
+    conn.commit()
+    conn.close()
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton('معلومات عن الشوب', callback_data='shop')],
+        [InlineKeyboardButton('آخر الأخبار', callback_data='news')],
+        [InlineKeyboardButton('مساعدة', callback_data='help')]
+    ])
+    name = user.first_name or 'لاعب'
+    await update.message.reply_text(f'هلا {name} 👋\nأنا بوت فورتنايت بالعربي. اختَر من الأزرار أو اكتب أمر. /help', reply_markup=kb)
+
+async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = (
+        "أوامر البوت (بالعربي):\n"
+        "/start - بداية\n"
+        "/help - عرض الأوامر\n"
+        "/shop - عرض آيتم شوب (بيانات تجريبية)\n"
+        "/news - آخر أخبار فورتنايت (تجريبي)\n"
+        "/weapon <اسم> - معلومات عن سلاح\n"
+    )
+    await update.message.reply_text(txt)
+
+async def shop_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    items = ["1) بندقية الهجوم Scar", "2) درع أسطوري", "3) سكين نادرة", "4) طائرة ورقية جلدية"]
+    txt = "آيتم شوب اليوم:\n" + "\n".join(items) + "\n\n(بيانات تجريبية)"
+    await update.message.reply_text(txt)
+
+async def news_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+    txt = f"آخر الأخبار (تجريبي) — {now}\n- فصل جديد قادم قريباً!\n- فعاليات أسبوعية جديدة."
+    await update.message.reply_text(txt)
+
+async def weapon_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if not args:
+        await update.message.reply_text("اكتب: /weapon <اسم_السلاح> (مثال: /weapon scar)")
+        return
+    name = " ".join(args).lower()
+    sample = {
+        "scar": "Scar — بندقية هجومية قوية، دقة ممتازة، مناسبة للمدى المتوسط.",
+        "pump": "Pump — بندقية شوتجان، ضرر عالي في المدى القريب.",
+        "rpg": "RPG — قاذف صواريخ، يسبب انفجار على مساحة كبيرة."
+    }
+    info = sample.get(name, "معذرة، ما عندي معلومات عن هذا السلاح الآن.")
+    await update.message.reply_text(info)
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    if data == 'shop':
+        await query.edit_message_text("آيتم شوب اليوم:\n- بندقية Scar\n- درع أسطوري\n(بيانات تجريبية)")
+    elif data == 'news':
+        await query.edit_message_text("آخر الأخبار: فصل جديد قادم! (بيانات تجريبية)")
+    elif data == 'help':
+        await query.edit_message_text("استخدم /help لعرض الأوامر أو راسل المطور.")
+
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = update.message.text.lower()
+    if 'شوب' in txt or 'shop' in txt:
+        await shop_cmd(update, context)
+    elif 'خبر' in txt or 'اخبار' in txt:
+        await news_cmd(update, context)
+    else:
+        await update.message.reply_text("ما فهمت، اكتب /help للأوامر أو اضغط الأزرار.")
+
+def main():
+    BOT_TOKEN = os.getenv('BOT_TOKEN', 'PUT_YOUR_TOKEN_HERE')
+    if BOT_TOKEN == :7588131232:AAFiouxXzq2r9N1WGUj2dsqQtEhj2k73opA
+        print("ضع متغير البيئة BOT_TOKEN في Railway أو عدّل القيمة.")
+    init_db()
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler('start', start))
+    app.add_handler(CommandHandler('help', help_cmd))
+    app.add_handler(CommandHandler('shop', shop_cmd))
+    app.add_handler(CommandHandler('news', news_cmd))
+    app.add_handler(CommandHandler('weapon', weapon_cmd))
+    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+    print("Bot is running...")
+    app.run_polling()
+
+if __name__ == '__main__':
+    main()
